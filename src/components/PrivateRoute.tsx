@@ -22,7 +22,7 @@ export function PrivateRoute({ children, allowedRoles }: PrivateRouteProps) {
   }
 
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-    // Redirect to appropriate page based on role
+    // Redirecionar para a página apropriada baseado no role
     switch (user.role) {
       case "GESTOR":
         return <Navigate to="/dashboard" replace />;

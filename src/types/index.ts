@@ -1,4 +1,4 @@
-// User Types
+// Tipos de Usuário
 export type UserRole = "GESTOR" | "PROFISSIONAL" | "CLIENTE";
 
 export interface User {
@@ -11,7 +11,7 @@ export interface User {
   updatedAt?: string;
 }
 
-// Auth Types
+// Tipos de Autenticação
 export interface LoginCredentials {
   email: string;
   password: string;
@@ -22,7 +22,7 @@ export interface AuthResponse {
   user: User;
 }
 
-// Service Types
+// Tipos de Serviço
 export interface Service {
   id: string;
   name: string;
@@ -33,7 +33,7 @@ export interface Service {
   updatedAt?: string;
 }
 
-// Work Schedule Types
+// Tipos de Jornada de Trabalho
 export type DayOfWeek =
   | "SEGUNDA"
   | "TERCA"
@@ -53,7 +53,7 @@ export interface WorkSchedule {
   updatedAt?: string;
 }
 
-// Professional Types
+// Tipos de Profissional
 export interface Professional {
   id: string;
   userId: string;
@@ -64,7 +64,7 @@ export interface Professional {
   updatedAt?: string;
 }
 
-// Client Types
+// Tipos de Cliente
 export interface Client {
   id: string;
   userId: string;
@@ -73,7 +73,7 @@ export interface Client {
   updatedAt?: string;
 }
 
-// Appointment Types
+// Tipos de Agendamento
 export type AppointmentStatus =
   | "AGENDADO"
   | "REALIZADO"
@@ -117,7 +117,7 @@ export interface RescheduleAppointmentRequest {
   startTime: string; // ISO 8601
 }
 
-// Notification Types
+// Tipos de Notificação
 export interface Notification {
   id: string;
   userId: string;
@@ -131,7 +131,7 @@ export interface Notification {
   updatedAt?: string;
 }
 
-// Dashboard Types
+// Tipos de Dashboard
 export interface DashboardMetrics {
   totalAppointments: number;
   completedAppointments: number;
@@ -161,7 +161,7 @@ export interface PopularService {
   revenue: number;
 }
 
-// Pagination Types
+// Tipos de Paginação
 export interface PaginationParams {
   page?: number;
   limit?: number;
@@ -179,7 +179,7 @@ export interface PaginatedResponse<T> {
   };
 }
 
-// Import Types
+// Tipos de Importação
 export interface ImportJob {
   id: string;
   type: "clients" | "appointments";
