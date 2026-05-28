@@ -17,7 +17,6 @@ const serviceSchema = z.object({
   name: z.string().min(3, "Nome deve ter no mínimo 3 caracteres"),
   durationMinutes: z.coerce.number().min(1, "Duração deve ser maior que 0"),
   price: z.coerce.number().min(0, "Preço deve ser maior ou igual a 0"),
-  description: z.string().optional(),
 });
 
 type ServiceFormData = z.infer<typeof serviceSchema>;
@@ -84,7 +83,6 @@ export function Services() {
         name: service.name,
         durationMinutes: service.durationMinutes,
         price: service.price,
-        description: service.description || "",
       });
     } else {
       setEditingService(null);
@@ -92,7 +90,6 @@ export function Services() {
         name: "",
         durationMinutes: 0,
         price: 0,
-        description: "",
       });
     }
     setShowModal(true);
@@ -109,7 +106,6 @@ export function Services() {
       name: data.name,
       durationMinutes: data.durationMinutes,
       price: data.price,
-      description: data.description,
     };
 
     if (editingService) {
@@ -249,7 +245,7 @@ export function Services() {
             />
           </div>
 
-          <div>
+          {/* <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Descrição (opcional)
             </label>
@@ -264,7 +260,7 @@ export function Services() {
                 {errors.description.message}
               </p>
             )}
-          </div>
+          </div> */}
 
           <div className="flex gap-3 pt-4">
             <Button
