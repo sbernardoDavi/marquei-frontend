@@ -1,11 +1,15 @@
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-export const formatCurrency = (value: number): string => {
+export const formatCurrency = (value: number | string): string => {
+  const numValue = typeof value === "string" ? parseFloat(value) : value;
+  if (numValue === undefined || numValue === null || isNaN(numValue)) {
+    return "R$ 0,00";
+  }
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
-  }).format(value);
+  }).format(numValue);
 };
 
 export const formatDate = (
@@ -24,9 +28,14 @@ export const formatDateTime = (dateTime: string): string => {
   return formatDate(dateTime, "dd/MM/yyyy 'às' HH:mm");
 };
 
-export const formatDuration = (minutes: number): string => {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
+export const formatDuration = (minutes: number | string): string => {
+  const numMinutes =
+    typeof minutes === "string" ? parseInt(minutes, 10) : minutes;
+  if (numMinutes === undefined || numMinutes === null || isNaN(numMinutes)) {
+    return "0min";
+  }
+  const hours = Math.floor(numMinutes / 60);
+  const mins = numMinutes % 60;
 
   if (hours === 0) return `${mins}min`;
   if (mins === 0) return `${hours}h`;
