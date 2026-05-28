@@ -24,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
+    // Verificar se o usuário já está logado
     const storedUser = authService.getStoredUser();
     if (storedUser) {
       setUser(storedUser);
@@ -39,8 +39,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(authData.user);
       toast.success("Login realizado com sucesso!");
     } catch (error: any) {
-      const message = error.response?.data?.message || "Erro ao fazer login";
-      toast.error(message);
+      const message = error.response?.data?.message || "Credenciais inválidas";
+      toast.error(message, {
+        duration: 5000, // 5 segundos
+      });
       throw error;
     }
   };

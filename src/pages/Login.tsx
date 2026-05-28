@@ -27,7 +27,7 @@ export function Login() {
     resolver: zodResolver(loginSchema),
   });
 
-  // Redirect based on role after successful login
+  // Redirecionar baseado no role após login bem-sucedido
   useEffect(() => {
     if (user) {
       switch (user.role) {
@@ -47,12 +47,22 @@ export function Login() {
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
-      await login(data);
+      await login({
+        email: data.email,
+        password: data.password,
+      });
+      // Redirecionamento será feito pelo useEffect quando user for atualizado
     } catch (error) {
-      // Error is handled in AuthContext
+      // Error is handled in AuthContext with toast
+      // Não fazer nada aqui, apenas manter o usuário na página de login
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSubmit(onSubmit)(e);
   };
 
   return (
@@ -65,7 +75,7 @@ export function Login() {
         </div>
 
         {/* Login Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={handleFormSubmit} className="space-y-6">
           <Input
             label="Email"
             type="email"

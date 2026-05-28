@@ -9,7 +9,7 @@ export const api = axios.create({
   },
 });
 
-// Request interceptor to add auth token
+// Interceptor de requisição para adicionar token de autenticação
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("access_token");
@@ -23,15 +23,20 @@ api.interceptors.request.use(
   },
 );
 
-// Response interceptor to handle errors
+// Interceptor de resposta para tratar erros
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("user");
-      window.location.href = "/login";
+    // Só redirecionar para login se o usuário estiver autenticado e o token for inválido
+    // Não redirecionar em erros da página de login
+    if (error.response?.status === 401 && error.config?.url !== "/auth/login") {
+      const token = localStorage.getItem("access_token");
+      if (token) {
+        // Token expirado ou inválido - só redirecionar se o usuário estava logado
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("user");
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   },
