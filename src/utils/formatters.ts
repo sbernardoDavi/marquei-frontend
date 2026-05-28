@@ -46,6 +46,25 @@ export const formatPercentage = (value: number): string => {
   return `${value.toFixed(1)}%`;
 };
 
+export const phoneMask = (value: string): string => {
+  if (!value) return "";
+
+  // Remove tudo que não é número
+  const numbers = value.replace(/\D/g, "");
+
+  // Aplica a máscara conforme o tamanho
+  if (numbers.length <= 2) {
+    return `(${numbers}`;
+  } else if (numbers.length <= 7) {
+    return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+  } else if (numbers.length <= 11) {
+    return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+  } else {
+    // Limita a 11 dígitos
+    return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+  }
+};
+
 export const dayOfWeekMap: Record<string, string> = {
   SEGUNDA: "Segunda-feira",
   TERCA: "Terça-feira",
