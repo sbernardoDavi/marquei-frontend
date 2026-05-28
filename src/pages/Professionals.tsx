@@ -6,9 +6,10 @@ import { authService } from "../services/auth.service";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
+import { PhoneInput } from "../components/ui/PhoneInput";
 import { Select } from "../components/ui/Select";
 import { Modal } from "../components/ui/Modal";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -55,6 +56,7 @@ export function Professionals() {
     register: registerProfessional,
     handleSubmit: handleSubmitProfessional,
     reset: resetProfessional,
+    control: controlProfessional,
     formState: { errors: professionalErrors },
   } = useForm<ProfessionalFormData>({
     resolver: zodResolver(professionalSchema),
@@ -111,7 +113,7 @@ export function Professionals() {
       data,
     }: {
       professionalId: string;
-      data: WorkScheduleFormData;
+      data: { dayOfWeek: string; startTime: string; endTime: string };
     }) => professionalsService.createWorkSchedule(professionalId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["professionals"] });
@@ -182,7 +184,11 @@ export function Professionals() {
     if (selectedProfessional) {
       createScheduleMutation.mutate({
         professionalId: selectedProfessional.id,
-        data,
+        data: {
+          dayOfWeek: data.dayOfWeek,
+          startTime: data.startTime,
+          endTime: data.endTime,
+        },
       });
     }
   };
@@ -286,14 +292,18 @@ export function Professionals() {
                     Serviços:
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {professional.services.map((service) => (
-                      <span
-                        key={service.id}
-                        className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                      >
-                        {service.name}
-                      </span>
-                    ))}
+                    {professional.services.map((item: any) => {
+                      // Extrair serviço (pode vir direto ou dentro de 'service')
+                      const service = item.service || item;
+                      return (
+                        <span
+                          key={service.id}
+                          className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                        >
+                          {service.name}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -379,12 +389,17 @@ export function Professionals() {
               {...registerProfessional("email")}
             />
 
-            <Input
-              label="Telefone (opcional)"
-              type="tel"
-              placeholder="(11) 99999-9999"
-              error={professionalErrors.phone?.message}
-              {...registerProfessional("phone")}
+            <Controller
+              name="phone"
+              control={controlProfessional}
+              render={({ field }) => (
+                <PhoneInput
+                  label="Telefone (opcional)"
+                  error={professionalErrors.phone?.message}
+                  onChange={field.onChange}
+                  value={field.value}
+                />
+              )}
             />
           </div>
 
