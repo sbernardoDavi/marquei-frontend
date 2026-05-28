@@ -4,8 +4,9 @@ import { clientsService } from "../services/clients.service";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
+import { PhoneInput } from "../components/ui/PhoneInput";
 import { Modal } from "../components/ui/Modal";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -35,6 +36,7 @@ export function Clients() {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
@@ -222,12 +224,17 @@ export function Clients() {
             {...register("email")}
           />
 
-          <Input
-            label="Telefone (opcional)"
-            type="tel"
-            placeholder="(11) 99999-9999"
-            error={errors.phone?.message}
-            {...register("phone")}
+          <Controller
+            name="phone"
+            control={control}
+            render={({ field }) => (
+              <PhoneInput
+                label="Telefone (opcional)"
+                error={errors.phone?.message}
+                onChange={field.onChange}
+                value={field.value}
+              />
+            )}
           />
 
           <Input
