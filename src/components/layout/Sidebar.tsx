@@ -35,7 +35,7 @@ const navItems: NavItem[] = [
     to: "/agendamentos",
     icon: Calendar,
     label: "Agendamentos",
-    roles: ["GESTOR", "PROFISSIONAL", "CLIENTE"],
+    roles: ["GESTOR", "CLIENTE"],
   },
   {
     to: "/servicos",
@@ -75,7 +75,6 @@ export function Sidebar() {
       {/* Logo */}
       <div className="p-6 border-b border-gray-800">
         <h1 className="text-2xl font-bold text-primary-400">Marquei</h1>
-        <p className="text-sm text-gray-400 mt-1">Sistema de Agendamento</p>
       </div>
 
       {/* Navigation */}

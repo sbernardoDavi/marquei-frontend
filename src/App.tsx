@@ -7,6 +7,10 @@ import { Layout } from "./components/layout/Layout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { Appointments } from "./pages/Appointments";
+import { Agenda } from "./pages/Agenda";
+import { Services } from "./pages/Services";
+import { Professionals } from "./pages/Professionals";
+import { Clients } from "./pages/Clients";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,7 +65,34 @@ function App() {
                 path="agenda"
                 element={
                   <PrivateRoute allowedRoles={["PROFISSIONAL"]}>
-                    <Appointments />
+                    <Agenda />
+                  </PrivateRoute>
+                }
+              />
+
+              <Route
+                path="servicos"
+                element={
+                  <PrivateRoute allowedRoles={["GESTOR"]}>
+                    <Services />
+                  </PrivateRoute>
+                }
+              />
+
+              <Route
+                path="profissionais"
+                element={
+                  <PrivateRoute allowedRoles={["GESTOR"]}>
+                    <Professionals />
+                  </PrivateRoute>
+                }
+              />
+
+              <Route
+                path="clientes"
+                element={
+                  <PrivateRoute allowedRoles={["GESTOR"]}>
+                    <Clients />
                   </PrivateRoute>
                 }
               />
