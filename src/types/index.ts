@@ -69,6 +69,7 @@ export interface Client {
   id: string;
   userId: string;
   user: User;
+  phone: string;
   createdAt?: string;
   updatedAt?: string;
 }

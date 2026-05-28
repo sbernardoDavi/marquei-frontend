@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Plus, Mail, Phone, User, Trash2, Calendar } from "lucide-react";
 import { formatDate } from "../utils/formatters";
 import { authService } from "../services/auth.service";
+import { phoneMask } from "../utils/formatters";
 
 const clientSchema = z.object({
   name: z.string().min(3, "Nome deve ter no mínimo 3 caracteres"),
@@ -176,7 +177,9 @@ export function Clients() {
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2 text-gray-600">
                         <Phone size={16} />
-                        <span>{client.user.phone || "-"}</span>
+                        <span>
+                          {phoneMask(client.phone) || "Não registrado"}
+                        </span>
                       </div>
                     </td>
                     <td className="py-3 px-4">
