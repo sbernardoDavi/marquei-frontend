@@ -115,7 +115,7 @@ export interface CreateAppointmentRequest {
 }
 
 export interface RescheduleAppointmentRequest {
-  startTime: string; // ISO 8601
+  newStartTime: string; // ISO 8601
 }
 
 // Tipos de Notificação

@@ -36,6 +36,7 @@ export function Appointments() {
     useState<Appointment | null>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showNewAppointmentModal, setShowNewAppointmentModal] = useState(false);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [page, setPage] = useState(1);
 
   // Estado do formulário de novo agendamento
@@ -126,6 +127,31 @@ export function Appointments() {
     retry: 1,
   });
 
+  // Query para horários disponíveis ao remarcar
+  const {
+    data: rescheduleSlotsData = [],
+    isLoading: loadingRescheduleSlots,
+    error: rescheduleSlotsError,
+  } = useQuery({
+    queryKey: [
+      "reschedule-slots",
+      selectedAppointment?.professional.id,
+      selectedAppointment?.service.id,
+      selectedDate,
+    ],
+    queryFn: async () => {
+      if (!selectedAppointment) return [];
+      const result = await appointmentsService.getAvailableSlots({
+        professionalId: selectedAppointment.professional.id,
+        serviceId: selectedAppointment.service.id,
+        date: selectedDate,
+      });
+      return result;
+    },
+    enabled: !!(selectedAppointment && selectedDate && showRescheduleModal),
+    retry: 1,
+  });
+
   const createAppointmentMutation = useMutation({
     mutationFn: appointmentsService.createAppointment,
     onSuccess: () => {
@@ -165,6 +191,21 @@ export function Appointments() {
     },
   });
 
+  const rescheduleMutation = useMutation({
+    mutationFn: ({ id, newStartTime }: { id: string; newStartTime: string }) =>
+      appointmentsService.reschedule(id, { newStartTime }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      toast.success("Agendamento remarcado com sucesso!");
+      handleCloseRescheduleModal();
+    },
+    onError: (error: any) => {
+      const message =
+        error.response?.data?.message || "Erro ao remarcar agendamento";
+      toast.error(message);
+    },
+  });
+
   const handleStatusChange = (status: string) => {
     if (selectedAppointment) {
       updateStatusMutation.mutate({ id: selectedAppointment.id, status });
@@ -175,6 +216,34 @@ export function Appointments() {
     if (confirm("Tem certeza que deseja cancelar este agendamento?")) {
       deleteAppointmentMutation.mutate(id);
     }
+  };
+
+  const handleOpenRescheduleModal = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setSelectedDate("");
+    setSelectedTimeSlot("");
+    setExpandedStep(1);
+    setShowRescheduleModal(true);
+  };
+
+  const handleCloseRescheduleModal = () => {
+    setShowRescheduleModal(false);
+    setSelectedAppointment(null);
+    setSelectedDate("");
+    setSelectedTimeSlot("");
+    setExpandedStep(1);
+  };
+
+  const handleReschedule = () => {
+    if (!selectedAppointment || !selectedTimeSlot) {
+      toast.error("Selecione uma nova data e horário");
+      return;
+    }
+
+    rescheduleMutation.mutate({
+      id: selectedAppointment.id,
+      newStartTime: selectedTimeSlot,
+    });
   };
 
   const handleOpenNewAppointmentModal = () => {
@@ -386,13 +455,22 @@ export function Appointments() {
                     </Button>
                   )}
                   {appointment.status === "AGENDADO" && (
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() => handleCancelAppointment(appointment.id)}
-                    >
-                      Cancelar
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleOpenRescheduleModal(appointment)}
+                      >
+                        Remarcar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleCancelAppointment(appointment.id)}
+                      >
+                        Cancelar
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
@@ -846,6 +924,260 @@ export function Appointments() {
               isLoading={createAppointmentMutation.isPending}
             >
               Confirmar Agendamento
+            </Button>
+          </div>
+        </div>
+      </Drawer>
+
+      {/* Reschedule Appointment Drawer */}
+      <Drawer
+        isOpen={showRescheduleModal}
+        onClose={handleCloseRescheduleModal}
+        title="Remarcar Agendamento"
+        size="xl"
+      >
+        <div className="flex flex-col min-h-full">
+          <div className="flex-1 space-y-4">
+            {/* Informações do agendamento atual */}
+            {selectedAppointment && (
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="font-semibold text-gray-900 mb-2">
+                  Agendamento Atual
+                </h4>
+                <div className="space-y-1 text-sm">
+                  <p className="text-gray-700">
+                    <span className="font-medium">Profissional:</span>{" "}
+                    {selectedAppointment.professional.user.name}
+                  </p>
+                  <p className="text-gray-700">
+                    <span className="font-medium">Serviço:</span>{" "}
+                    {selectedAppointment.service.name}
+                  </p>
+                  <p className="text-gray-700">
+                    <span className="font-medium">Data/Hora:</span>{" "}
+                    {formatDateTime(selectedAppointment.startTime)}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Step 1: Select Date */}
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setExpandedStep(expandedStep === 1 ? 0 : 1)}
+                className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white font-semibold text-sm">
+                    1
+                  </span>
+                  <div className="text-left">
+                    <p className="font-medium text-gray-900">
+                      Selecione a Nova Data
+                    </p>
+                    {selectedDate && (
+                      <p className="text-sm text-gray-600">
+                        {new Date(
+                          selectedDate + "T00:00:00",
+                        ).toLocaleDateString("pt-BR")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {selectedDate && (
+                    <Edit2 size={16} className="text-gray-400" />
+                  )}
+                  <ChevronDown
+                    size={20}
+                    className={cn(
+                      "text-gray-400 transition-transform",
+                      expandedStep === 1 && "transform rotate-180",
+                    )}
+                  />
+                </div>
+              </button>
+              {expandedStep === 1 && (
+                <div className="p-4">
+                  <Calendar
+                    selectedDate={selectedDate}
+                    onSelectDate={(date) => {
+                      setSelectedDate(date);
+                      setSelectedTimeSlot("");
+                      setExpandedStep(2);
+                    }}
+                    minDate={new Date().toISOString().split("T")[0]}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Step 2: Select Time Slot */}
+            {selectedDate && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setExpandedStep(expandedStep === 2 ? 0 : 2)}
+                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white font-semibold text-sm">
+                      2
+                    </span>
+                    <div className="text-left">
+                      <p className="font-medium text-gray-900">
+                        Selecione o Novo Horário
+                      </p>
+                      {selectedTimeSlot && (
+                        <p className="text-sm text-gray-600">
+                          {new Date(selectedTimeSlot).toLocaleTimeString(
+                            "pt-BR",
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            },
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedTimeSlot && (
+                      <Edit2 size={16} className="text-gray-400" />
+                    )}
+                    <ChevronDown
+                      size={20}
+                      className={cn(
+                        "text-gray-400 transition-transform",
+                        expandedStep === 2 && "transform rotate-180",
+                      )}
+                    />
+                  </div>
+                </button>
+                {expandedStep === 2 && (
+                  <div className="p-4">
+                    {loadingRescheduleSlots ? (
+                      <p className="text-sm text-gray-500">
+                        Carregando horários disponíveis...
+                      </p>
+                    ) : rescheduleSlotsError ? (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-600">
+                          Erro ao carregar horários disponíveis. Tente
+                          novamente.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                        {generateAllTimeSlots(selectedDate).map((slotTime) => {
+                          const isAvailable =
+                            Array.isArray(rescheduleSlotsData) &&
+                            rescheduleSlotsData.some(
+                              (slot) => slot.startTime === slotTime,
+                            );
+
+                          return (
+                            <button
+                              key={slotTime}
+                              onClick={() => {
+                                if (isAvailable) {
+                                  setSelectedTimeSlot(slotTime);
+                                  setExpandedStep(0);
+                                }
+                              }}
+                              disabled={!isAvailable}
+                              className={cn(
+                                "p-3 border-2 rounded-lg text-center transition-all",
+                                selectedTimeSlot === slotTime
+                                  ? "border-primary-500 bg-primary-50 font-semibold"
+                                  : isAvailable
+                                    ? "border-gray-200 hover:border-primary-500 cursor-pointer"
+                                    : "border-gray-100 bg-gray-50 cursor-not-allowed opacity-50",
+                              )}
+                            >
+                              <Clock
+                                size={16}
+                                className={cn(
+                                  "mx-auto mb-1",
+                                  isAvailable
+                                    ? "text-gray-600"
+                                    : "text-gray-400",
+                                )}
+                              />
+                              <p
+                                className={cn(
+                                  "text-sm",
+                                  isAvailable
+                                    ? "text-gray-900"
+                                    : "text-gray-400 line-through",
+                                )}
+                              >
+                                {new Date(slotTime).toLocaleTimeString(
+                                  "pt-BR",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  },
+                                )}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Summary */}
+            {selectedTimeSlot && selectedAppointment && (
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-semibold text-gray-900 mb-3">
+                  Novo Agendamento
+                </h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Data:</span>
+                    <span className="font-medium">
+                      {new Date(selectedDate + "T00:00:00").toLocaleDateString(
+                        "pt-BR",
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Horário:</span>
+                    <span className="font-medium">
+                      {new Date(selectedTimeSlot).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-6 pb-6 px-6 mt-auto border-t border-gray-200 bg-white">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleCloseRescheduleModal}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleReschedule}
+              className="flex-1"
+              disabled={!selectedTimeSlot}
+              isLoading={rescheduleMutation.isPending}
+            >
+              Confirmar Remarcação
             </Button>
           </div>
         </div>
