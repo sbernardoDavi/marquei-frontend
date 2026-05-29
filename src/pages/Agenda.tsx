@@ -9,25 +9,45 @@ import { toast } from "sonner";
 import { Calendar, Clock, User, Scissors } from "lucide-react";
 import { cn } from "../utils/cn";
 import type { Appointment } from "../types";
+import { PeriodFilter } from "../components/appointments/PeriodFilter";
 
 export function Agenda() {
   const queryClient = useQueryClient();
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0],
-  );
+
+  // Inicializa o estado diretamente com a lógica de 7 dias padrão
+  const [selectedPeriod, setSelectedPeriod] = useState<
+    "7" | "15" | "30" | "custom"
+  >("7");
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today.toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    today.setDate(today.getDate() + 7);
+    return today.toISOString().split("T")[0];
+  });
 
   const { data, isLoading } = useQuery({
-    queryKey: ["appointments", "professional", selectedDate],
-    queryFn: () =>
-      appointmentsService.getAppointments({
+    queryKey: ["appointments", "professional", startDate, endDate],
+    queryFn: () => {
+      const params: any = {
         page: 1,
         limit: 100,
         sortBy: "startTime",
         sortOrder: "asc",
-      }),
+      };
+
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+
+      return appointmentsService.getAppointments(params);
+    },
   });
 
   const updateStatusMutation = useMutation({
@@ -50,6 +70,17 @@ export function Agenda() {
     }
   };
 
+  // Atualiza os estados de controle superiores
+  const handlePeriodChange = (
+    period: "7" | "15" | "30" | "custom",
+    newStartDate: string,
+    newEndDate: string,
+  ) => {
+    setSelectedPeriod(period);
+    setStartDate(newStartDate);
+    setEndDate(newEndDate);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -58,32 +89,36 @@ export function Agenda() {
     );
   }
 
-  // Filtrar agendamentos do profissional atual e data selecionada
-  const appointments = (data?.data || []).filter((appointment) => {
-    const appointmentDate = new Date(appointment.startTime)
-      .toISOString()
-      .split("T")[0];
-    return appointmentDate === selectedDate;
-  });
+  const appointments = data?.data || [];
 
-  const today = new Date().toISOString().split("T")[0];
-  const isToday = selectedDate === today;
+  const appointmentsByDate = appointments.reduce(
+    (acc, appointment) => {
+      const date = new Date(appointment.startTime).toISOString().split("T")[0];
+      if (!acc[date]) {
+        acc[date] = [];
+      }
+      acc[date].push(appointment);
+      return acc;
+    },
+    {} as Record<string, Appointment[]>,
+  );
+
+  const sortedDates = Object.keys(appointmentsByDate).sort();
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Minha Agenda</h1>
-          <p className="text-gray-600 mt-1">
-            {isToday ? "Seus agendamentos de hoje" : "Seus agendamentos"}
-          </p>
+          <p className="text-gray-600 mt-1">Seus agendamentos</p>
         </div>
         <div className="flex items-center gap-3">
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+          {/* Passando os estados necessários para o controle do filtro */}
+          <PeriodFilter
+            selectedPeriod={selectedPeriod}
+            customStartDate={startDate}
+            customEndDate={endDate}
+            onPeriodChange={handlePeriodChange}
           />
         </div>
       </div>
@@ -125,109 +160,151 @@ export function Agenda() {
       </div>
 
       {/* Appointments Timeline */}
-      <div className="space-y-4">
-        {appointments.length === 0 ? (
+      <div className="space-y-6">
+        {sortedDates.length === 0 ? (
           <Card>
             <div className="text-center py-12">
               <Calendar className="mx-auto text-gray-400 mb-4" size={48} />
               <p className="text-gray-500">
-                {isToday
-                  ? "Você não tem agendamentos para hoje"
-                  : "Nenhum agendamento nesta data"}
+                Nenhum agendamento encontrado no período selecionado
               </p>
             </div>
           </Card>
         ) : (
-          appointments.map((appointment) => {
-            const startTime = new Date(appointment.startTime);
-            const isPast = startTime < new Date();
-            const isUpcoming = !isPast && appointment.status === "AGENDADO";
+          sortedDates.map((date) => {
+            const dateAppointments = appointmentsByDate[date];
+            const dateObj = new Date(date + "T00:00:00");
+            const isToday = date === new Date().toISOString().split("T")[0];
 
             return (
-              <Card
-                key={appointment.id}
-                className={cn(
-                  "hover:shadow-lg transition-shadow",
-                  isUpcoming && "border-l-4 border-l-primary-500",
-                )}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 space-y-3">
-                    {/* Time and Status */}
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-                        <Clock size={20} className="text-primary-600" />
-                        {startTime.toLocaleTimeString("pt-BR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </div>
-                      <span
+              <div key={date} className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={cn(
+                      "px-4 py-2 rounded-lg",
+                      isToday
+                        ? "bg-primary-600 text-white"
+                        : "bg-gray-100 text-gray-900",
+                    )}
+                  >
+                    <p className="text-sm font-medium">
+                      {dateObj.toLocaleDateString("pt-BR", { weekday: "long" })}
+                    </p>
+                    <p className="text-lg font-bold">
+                      {dateObj.toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "long",
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <span className="text-sm text-gray-500">
+                    {dateAppointments.length}{" "}
+                    {dateAppointments.length === 1
+                      ? "agendamento"
+                      : "agendamentos"}
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {dateAppointments.map((appointment) => {
+                    const startTime = new Date(appointment.startTime);
+                    const isPast = startTime < new Date();
+                    const isUpcoming =
+                      !isPast && appointment.status === "AGENDADO";
+
+                    return (
+                      <Card
+                        key={appointment.id}
                         className={cn(
-                          "px-3 py-1 rounded-full text-sm font-medium",
-                          statusMap[appointment.status]?.color,
+                          "hover:shadow-lg transition-shadow",
+                          isUpcoming && "border-l-4 border-l-primary-500",
                         )}
                       >
-                        {statusMap[appointment.status]?.label}
-                      </span>
-                      {isUpcoming && (
-                        <span className="px-2 py-1 bg-primary-100 text-primary-800 text-xs rounded-full">
-                          Próximo
-                        </span>
-                      )}
-                    </div>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 space-y-3">
+                            <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                                <Clock size={20} className="text-primary-600" />
+                                {startTime.toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </div>
+                              <span
+                                className={cn(
+                                  "px-3 py-1 rounded-full text-sm font-medium",
+                                  statusMap[appointment.status]?.color,
+                                )}
+                              >
+                                {statusMap[appointment.status]?.label}
+                              </span>
+                              {isUpcoming && (
+                                <span className="px-2 py-1 bg-primary-100 text-primary-800 text-xs rounded-full">
+                                  Próximo
+                                </span>
+                              )}
+                            </div>
 
-                    {/* Details */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="flex items-center gap-2 text-gray-700">
-                        <User size={18} className="text-gray-400" />
-                        <div>
-                          <p className="text-xs text-gray-500">Cliente</p>
-                          <p className="font-medium">
-                            {appointment.client.user.name}
-                          </p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="flex items-center gap-2 text-gray-700">
+                                <User size={18} className="text-gray-400" />
+                                <div>
+                                  <p className="text-xs text-gray-500">
+                                    Cliente
+                                  </p>
+                                  <p className="font-medium">
+                                    {appointment.client.user.name}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 text-gray-700">
+                                <Scissors size={18} className="text-gray-400" />
+                                <div>
+                                  <p className="text-xs text-gray-500">
+                                    Serviço
+                                  </p>
+                                  <p className="font-medium">
+                                    {appointment.service.name}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 text-gray-700">
+                                <Clock size={18} className="text-gray-400" />
+                                <div>
+                                  <p className="text-xs text-gray-500">
+                                    Duração
+                                  </p>
+                                  <p className="font-medium">
+                                    {appointment.service.durationMinutes} min
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {appointment.status === "AGENDADO" && (
+                            <div className="flex gap-2 ml-4">
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => {
+                                  setSelectedAppointment(appointment);
+                                  setShowStatusModal(true);
+                                }}
+                              >
+                                Alterar Status
+                              </Button>
+                            </div>
+                          )}
                         </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-gray-700">
-                        <Scissors size={18} className="text-gray-400" />
-                        <div>
-                          <p className="text-xs text-gray-500">Serviço</p>
-                          <p className="font-medium">
-                            {appointment.service.name}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-gray-700">
-                        <Clock size={18} className="text-gray-400" />
-                        <div>
-                          <p className="text-xs text-gray-500">Duração</p>
-                          <p className="font-medium">
-                            {appointment.service.durationMinutes} min
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  {appointment.status === "AGENDADO" && (
-                    <div className="flex gap-2 ml-4">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          setSelectedAppointment(appointment);
-                          setShowStatusModal(true);
-                        }}
-                      >
-                        Alterar Status
-                      </Button>
-                    </div>
-                  )}
+                      </Card>
+                    );
+                  })}
                 </div>
-              </Card>
+              </div>
             );
           })
         )}

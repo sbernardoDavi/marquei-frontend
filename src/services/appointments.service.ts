@@ -11,7 +11,7 @@ import type {
 
 export const appointmentsService = {
   async getAppointments(
-    params?: PaginationParams,
+    params?: PaginationParams & { startDate?: string; endDate?: string },
   ): Promise<PaginatedResponse<Appointment>> {
     const response = await api.get<PaginatedResponse<Appointment>>(
       "/appointments",
@@ -21,7 +21,7 @@ export const appointmentsService = {
   },
 
   async getMyAppointments(
-    params?: PaginationParams,
+    params?: PaginationParams & { startDate?: string; endDate?: string },
   ): Promise<PaginatedResponse<Appointment>> {
     const response = await api.get<PaginatedResponse<Appointment>>(
       "/appointments/my-appointments",
