@@ -27,7 +27,7 @@ export const authService = {
       password?: string;
     },
   ): Promise<User> {
-    const response = await api.patch<User>(`/users/${userId}`, data);
+    const response = await api.patch<User>(`auth/users/${userId}`, data);
     return response.data;
   },
 

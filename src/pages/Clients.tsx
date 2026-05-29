@@ -10,7 +10,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Plus, Mail, Phone, User, Trash2, Calendar } from "lucide-react";
+import { Plus, Mail, Phone, User, Trash2, Calendar, Edit } from "lucide-react";
 import { formatDate } from "../utils/formatters";
 import { authService } from "../services/auth.service";
 import { phoneMask } from "../utils/formatters";
@@ -22,11 +22,28 @@ const clientSchema = z.object({
   password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
 });
 
+import type { Client } from "../types";
+
+// Schema para edição (senha é opcional)
+const editClientSchema = z.object({
+  name: z.string().min(3, "Nome deve ter no mínimo 3 caracteres"),
+  email: z.string().email("Email inválido"),
+  phone: z.string().min(10, "Telefone inválido").optional(),
+  password: z
+    .string()
+    .min(6, "Senha deve ter no mínimo 6 caracteres")
+    .optional()
+    .or(z.literal("")),
+});
+
 type ClientFormData = z.infer<typeof clientSchema>;
+type EditClientFormData = z.infer<typeof editClientSchema>;
 
 export function Clients() {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const isEditMode = !!editingClient;
 
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ["clients"],
@@ -39,8 +56,8 @@ export function Clients() {
     reset,
     control,
     formState: { errors },
-  } = useForm<ClientFormData>({
-    resolver: zodResolver(clientSchema),
+  } = useForm<ClientFormData | EditClientFormData>({
+    resolver: zodResolver(isEditMode ? editClientSchema : clientSchema),
   });
 
   const createMutation = useMutation({
@@ -69,6 +86,42 @@ export function Clients() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async (
+      data: EditClientFormData & { clientId: string; userId: string },
+    ) => {
+      // Atualizar dados do usuário
+      const updateData: any = {
+        name: data.name,
+        email: data.email,
+      };
+
+      // Só incluir senha se foi preenchida
+      if (data.password && data.password.trim() !== "") {
+        updateData.password = data.password;
+      }
+
+      await authService.updateUser(data.userId, updateData);
+
+      // Atualizar telefone do cliente
+      await clientsService.updateClient(data.clientId, {
+        phone: data.phone,
+      });
+
+      return data.clientId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      toast.success("Cliente atualizado com sucesso!");
+      handleCloseModal();
+    },
+    onError: (error: any) => {
+      const message =
+        error.response?.data?.message || "Erro ao atualizar cliente";
+      toast.error(message);
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: clientsService.deleteClient,
     onSuccess: () => {
@@ -81,6 +134,7 @@ export function Clients() {
   });
 
   const handleOpenModal = () => {
+    setEditingClient(null);
     reset({
       name: "",
       email: "",
@@ -90,13 +144,33 @@ export function Clients() {
     setShowModal(true);
   };
 
+  const handleOpenEditModal = (client: Client) => {
+    setEditingClient(client);
+    reset({
+      name: client.user.name,
+      email: client.user.email,
+      phone: client.phone || "",
+      password: "",
+    });
+    setShowModal(true);
+  };
+
   const handleCloseModal = () => {
     setShowModal(false);
+    setEditingClient(null);
     reset();
   };
 
-  const onSubmit = (data: ClientFormData) => {
-    createMutation.mutate(data);
+  const onSubmit = (data: ClientFormData | EditClientFormData) => {
+    if (isEditMode && editingClient) {
+      updateMutation.mutate({
+        ...(data as EditClientFormData),
+        clientId: editingClient.id,
+        userId: editingClient.user.id,
+      });
+    } else {
+      createMutation.mutate(data as ClientFormData);
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -196,13 +270,22 @@ export function Clients() {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => handleDelete(client.id)}
-                      >
-                        <Trash2 size={16} />
-                      </Button>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleOpenEditModal(client)}
+                        >
+                          <Edit size={16} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => handleDelete(client.id)}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -212,8 +295,12 @@ export function Clients() {
         )}
       </Card>
 
-      {/* Create Modal */}
-      <Modal isOpen={showModal} onClose={handleCloseModal} title="Novo Cliente">
+      {/* Create/Edit Modal */}
+      <Modal
+        isOpen={showModal}
+        onClose={handleCloseModal}
+        title={isEditMode ? "Editar Cliente" : "Novo Cliente"}
+      >
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input
             label="Nome Completo"
@@ -244,7 +331,11 @@ export function Clients() {
           />
 
           <Input
-            label="Senha"
+            label={
+              isEditMode
+                ? "Nova Senha (deixe em branco para manter a atual)"
+                : "Senha"
+            }
             type="password"
             placeholder="••••••••"
             error={errors.password?.message}
@@ -263,9 +354,11 @@ export function Clients() {
             <Button
               type="submit"
               className="flex-1"
-              isLoading={createMutation.isPending}
+              isLoading={
+                isEditMode ? updateMutation.isPending : createMutation.isPending
+              }
             >
-              Criar Cliente
+              {isEditMode ? "Salvar Alterações" : "Criar Cliente"}
             </Button>
           </div>
         </form>
