@@ -18,6 +18,19 @@ export const authService = {
     return response.data;
   },
 
+  async updateUser(
+    userId: string,
+    data: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      password?: string;
+    },
+  ): Promise<User> {
+    const response = await api.patch<User>(`/users/${userId}`, data);
+    return response.data;
+  },
+
   logout() {
     localStorage.removeItem("access_token");
     localStorage.removeItem("user");
