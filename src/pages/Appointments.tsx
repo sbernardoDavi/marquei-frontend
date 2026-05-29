@@ -36,14 +36,23 @@ export function Appointments() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["appointments", page],
-    queryFn: () =>
-      appointmentsService.getAppointments({
+    queryKey: ["appointments", page, user?.id, user?.role],
+    queryFn: () => {
+      const params = {
         page,
         limit: 10,
         sortBy: "startTime",
-        sortOrder: "desc",
-      }),
+        sortOrder: "desc" as const,
+      };
+
+      // Cliente usa endpoint específico
+      if (user?.role === "CLIENTE") {
+        return appointmentsService.getMyAppointments(params);
+      }
+
+      // Gestor e Profissional usam endpoint geral
+      return appointmentsService.getAppointments(params);
+    },
   });
 
   // Queries para novo agendamento
@@ -185,12 +194,40 @@ export function Appointments() {
   const appointments = data?.data || [];
   const meta = data?.meta;
 
+  // Mensagens personalizadas por role
+  const getEmptyMessage = () => {
+    if (user?.role === "CLIENTE") {
+      return "Você ainda não tem agendamentos";
+    }
+    return "Nenhum agendamento encontrado";
+  };
+
+  const getPageTitle = () => {
+    if (user?.role === "CLIENTE") {
+      return "Meus Agendamentos";
+    }
+    if (user?.role === "PROFISSIONAL") {
+      return "Meus Atendimentos";
+    }
+    return "Agendamentos";
+  };
+
+  const getPageDescription = () => {
+    if (user?.role === "CLIENTE") {
+      return "Visualize e gerencie seus agendamentos";
+    }
+    if (user?.role === "PROFISSIONAL") {
+      return "Gerencie seus atendimentos";
+    }
+    return "Gerencie todos os agendamentos";
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Agendamentos</h1>
-          <p className="text-gray-600 mt-1">Gerencie todos os agendamentos</p>
+          <h1 className="text-3xl font-bold text-gray-900">{getPageTitle()}</h1>
+          <p className="text-gray-600 mt-1">{getPageDescription()}</p>
         </div>
         {user?.role === "CLIENTE" && (
           <Button onClick={handleOpenNewAppointmentModal}>
@@ -206,7 +243,16 @@ export function Appointments() {
           <Card>
             <div className="text-center py-12">
               <Calendar className="mx-auto text-gray-400 mb-4" size={48} />
-              <p className="text-gray-500">Nenhum agendamento encontrado</p>
+              <p className="text-gray-500">{getEmptyMessage()}</p>
+              {user?.role === "CLIENTE" && (
+                <Button
+                  onClick={handleOpenNewAppointmentModal}
+                  className="mt-4"
+                >
+                  <Plus size={20} className="mr-2" />
+                  Fazer meu primeiro agendamento
+                </Button>
+              )}
             </div>
           </Card>
         ) : (
@@ -244,15 +290,17 @@ export function Appointments() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <User size={18} className="text-gray-400" />
-                      <div>
-                        <p className="text-xs text-gray-500">Cliente</p>
-                        <p className="font-medium text-green-700">
-                          {appointment.client.user.name}
-                        </p>
+                    {appointment.client && (
+                      <div className="flex items-center gap-2 text-gray-700">
+                        <User size={18} className="text-gray-400" />
+                        <div>
+                          <p className="text-xs text-gray-500">Cliente</p>
+                          <p className="font-medium text-green-700">
+                            {appointment.client.user.name}
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     <div className="flex items-center gap-2 text-gray-700">
                       <User size={18} className="text-gray-400" />

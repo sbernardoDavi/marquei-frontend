@@ -20,6 +20,16 @@ export const appointmentsService = {
     return response.data;
   },
 
+  async getMyAppointments(
+    params?: PaginationParams,
+  ): Promise<PaginatedResponse<Appointment>> {
+    const response = await api.get<PaginatedResponse<Appointment>>(
+      "/appointments/my-appointments",
+      { params },
+    );
+    return response.data;
+  },
+
   async getAppointmentById(id: string): Promise<Appointment> {
     const response = await api.get<Appointment>(`/appointments/${id}`);
     return response.data;
