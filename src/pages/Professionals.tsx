@@ -6,10 +6,13 @@ import { authService } from "../services/auth.service";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
-import { PhoneInput } from "../components/ui/PhoneInput";
 import { Select } from "../components/ui/Select";
 import { Modal } from "../components/ui/Modal";
-import { useForm, Controller } from "react-hook-form";
+import {
+  WorkScheduleManager,
+  type WorkSchedule,
+} from "../components/WorkScheduleManager";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -25,14 +28,7 @@ const professionalSchema = z.object({
   serviceIds: z.array(z.string()).min(1, "Selecione pelo menos um serviço"),
 });
 
-const workScheduleSchema = z.object({
-  dayOfWeek: z.string(),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/, "Formato inválido (HH:MM)"),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/, "Formato inválido (HH:MM)"),
-});
-
 type ProfessionalFormData = z.infer<typeof professionalSchema>;
-type WorkScheduleFormData = z.infer<typeof workScheduleSchema>;
 
 export function Professionals() {
   const queryClient = useQueryClient();
@@ -41,6 +37,7 @@ export function Professionals() {
   const [selectedProfessional, setSelectedProfessional] =
     useState<Professional | null>(null);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [workSchedules, setWorkSchedules] = useState<WorkSchedule[]>([]);
 
   const { data: professionals = [], isLoading } = useQuery({
     queryKey: ["professionals"],
@@ -56,11 +53,20 @@ export function Professionals() {
     register: registerProfessional,
     handleSubmit: handleSubmitProfessional,
     reset: resetProfessional,
-    control: controlProfessional,
+    setValue: setValueProfessional,
     formState: { errors: professionalErrors },
   } = useForm<ProfessionalFormData>({
     resolver: zodResolver(professionalSchema),
   });
+
+  // Formulário separado para adicionar horário a profissionais existentes
+  const workScheduleSchema = z.object({
+    dayOfWeek: z.string(),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/, "Formato inválido (HH:MM)"),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/, "Formato inválido (HH:MM)"),
+  });
+
+  type WorkScheduleFormData = z.infer<typeof workScheduleSchema>;
 
   const {
     register: registerSchedule,
@@ -73,16 +79,30 @@ export function Professionals() {
 
   const createMutation = useMutation({
     mutationFn: async (data: ProfessionalFormData) => {
+      // Criar usuário
       const userResponse = await authService.register({
         name: data.name,
         email: data.email,
         password: data.password,
-        phone: data.phone,
+        role: "PROFISSIONAL",
       });
-      return professionalsService.createProfessional({
+
+      // Criar profissional
+      const professional = await professionalsService.createProfessional({
         userId: userResponse.user.id,
         serviceIds: data.serviceIds,
       });
+
+      // Adicionar jornadas de trabalho se houver
+      if (workSchedules.length > 0) {
+        await Promise.all(
+          workSchedules.map((schedule) =>
+            professionalsService.createWorkSchedule(professional.id, schedule),
+          ),
+        );
+      }
+
+      return professional;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["professionals"] });
@@ -151,6 +171,7 @@ export function Professionals() {
       serviceIds: [],
     });
     setSelectedServices([]);
+    setWorkSchedules([]);
     setShowModal(true);
   };
 
@@ -158,6 +179,7 @@ export function Professionals() {
     setShowModal(false);
     resetProfessional();
     setSelectedServices([]);
+    setWorkSchedules([]);
   };
 
   const handleOpenScheduleModal = (professional: Professional) => {
@@ -177,7 +199,7 @@ export function Professionals() {
   };
 
   const onSubmitProfessional = (data: ProfessionalFormData) => {
-    createMutation.mutate({ ...data, serviceIds: selectedServices });
+    createMutation.mutate(data);
   };
 
   const onSubmitSchedule = (data: WorkScheduleFormData) => {
@@ -206,20 +228,16 @@ export function Professionals() {
   };
 
   const toggleService = (serviceId: string) => {
-    setSelectedServices((prev) =>
-      prev.includes(serviceId)
+    setSelectedServices((prev) => {
+      const newServices = prev.includes(serviceId)
         ? prev.filter((id) => id !== serviceId)
-        : [...prev, serviceId],
-    );
-  };
+        : [...prev, serviceId];
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Carregando profissionais...</div>
-      </div>
-    );
-  }
+      // Sincronizar com o formulário
+      setValueProfessional("serviceIds", newServices);
+      return newServices;
+    });
+  };
 
   const daysOfWeek: { value: DayOfWeek; label: string }[] = [
     { value: "SEGUNDA", label: "Segunda-feira" },
@@ -230,6 +248,14 @@ export function Professionals() {
     { value: "SABADO", label: "Sábado" },
     { value: "DOMINGO", label: "Domingo" },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Carregando profissionais...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -373,33 +399,20 @@ export function Professionals() {
           onSubmit={handleSubmitProfessional(onSubmitProfessional)}
           className="space-y-4"
         >
-          <Input
-            label="Nome Completo"
-            placeholder="Carlos Silva"
-            error={professionalErrors.name?.message}
-            {...registerProfessional("name")}
-          />
-
           <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Nome Completo"
+              placeholder="Carlos Silva"
+              error={professionalErrors.name?.message}
+              {...registerProfessional("name")}
+            />
+
             <Input
               label="Email"
               type="email"
-              placeholder="carlos@email.com"
+              placeholder="email@email.com"
               error={professionalErrors.email?.message}
               {...registerProfessional("email")}
-            />
-
-            <Controller
-              name="phone"
-              control={controlProfessional}
-              render={({ field }) => (
-                <PhoneInput
-                  label="Telefone (opcional)"
-                  error={professionalErrors.phone?.message}
-                  onChange={field.onChange}
-                  value={field.value}
-                />
-              )}
             />
           </div>
 
@@ -437,6 +450,12 @@ export function Professionals() {
               </p>
             )}
           </div>
+
+          {/* Jornada de Trabalho */}
+          <WorkScheduleManager
+            schedules={workSchedules}
+            onSchedulesChange={setWorkSchedules}
+          />
 
           <div className="flex gap-3 pt-4">
             <Button
