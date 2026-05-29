@@ -50,10 +50,13 @@ export function Clients() {
         name: data.name,
         email: data.email,
         password: data.password,
-        phone: data.phone,
+        role: "CLIENTE",
       });
       // Depois criar o cliente
-      return clientsService.createClient({ userId: userResponse.user.id });
+      return clientsService.createClient({
+        userId: userResponse.user.id,
+        phone: data.phone,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
