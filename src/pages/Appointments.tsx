@@ -8,7 +8,6 @@ import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
 import { Drawer } from "../components/ui/Drawer";
 import { Select } from "../components/ui/Select";
-import { Input } from "../components/ui/Input";
 import {
   formatDateTime,
   statusMap,
@@ -19,7 +18,7 @@ import { useAuth } from "../contexts/AuthContext";
 import type { Appointment } from "../types";
 import { toast } from "sonner";
 import {
-  Calendar,
+  Calendar as CalendarIcon,
   User,
   Scissors,
   Plus,
@@ -28,6 +27,7 @@ import {
   Edit2,
 } from "lucide-react";
 import { cn } from "../utils/cn";
+import { Calendar } from "../components/ui/Calendar";
 
 export function Appointments() {
   const { user } = useAuth();
@@ -285,7 +285,7 @@ export function Appointments() {
         {appointments.length === 0 ? (
           <Card>
             <div className="text-center py-12">
-              <Calendar className="mx-auto text-gray-400 mb-4" size={48} />
+              <CalendarIcon className="mx-auto text-gray-400 mb-4" size={48} />
               <p className="text-gray-500">{getEmptyMessage()}</p>
               {user?.role === "CLIENTE" && (
                 <Button
@@ -324,7 +324,7 @@ export function Appointments() {
                   {/* Details */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="flex items-center gap-2 text-gray-700">
-                      <Calendar size={18} className="text-gray-400" />
+                      <CalendarIcon size={18} className="text-gray-400" />
                       <div>
                         <p className="text-xs text-gray-500">Data/Hora</p>
                         <p className="font-medium">
@@ -650,17 +650,14 @@ export function Appointments() {
                 </button>
                 {expandedStep === 3 && (
                   <div className="p-4">
-                    <Input
-                      type="date"
-                      value={selectedDate}
-                      min={new Date().toISOString().split("T")[0]}
-                      onChange={(e) => {
-                        setSelectedDate(e.target.value);
+                    <Calendar
+                      selectedDate={selectedDate}
+                      onSelectDate={(date) => {
+                        setSelectedDate(date);
                         setSelectedTimeSlot("");
-                        if (e.target.value) {
-                          setExpandedStep(4);
-                        }
+                        setExpandedStep(4);
                       }}
+                      minDate={new Date().toISOString().split("T")[0]}
                     />
                   </div>
                 )}
