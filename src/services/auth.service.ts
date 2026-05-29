@@ -12,6 +12,7 @@ export const authService = {
     password: string;
     name: string;
     phone?: string;
+    role?: string;
   }) {
     const response = await api.post("/auth/register", data);
     return response.data;
