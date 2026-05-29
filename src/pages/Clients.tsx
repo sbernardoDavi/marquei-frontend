@@ -3,17 +3,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clientsService } from "../services/clients.service";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
-import { Input } from "../components/ui/Input";
-import { PhoneInput } from "../components/ui/PhoneInput";
-import { Modal } from "../components/ui/Modal";
-import { useForm, Controller } from "react-hook-form";
+import { Drawer } from "../components/ui/Drawer";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { Plus, Mail, Phone, User, Trash2, Calendar, Edit } from "lucide-react";
-import { formatDate } from "../utils/formatters";
+import { formatDate, phoneMask } from "../utils/formatters";
 import { authService } from "../services/auth.service";
-import { phoneMask } from "../utils/formatters";
+import { ClientFormSteps } from "../components/clients/ClientFormSteps";
 
 const clientSchema = z.object({
   name: z.string().min(3, "Nome deve ter no mínimo 3 caracteres"),
@@ -41,8 +39,9 @@ type EditClientFormData = z.infer<typeof editClientSchema>;
 
 export function Clients() {
   const queryClient = useQueryClient();
-  const [showModal, setShowModal] = useState(false);
+  const [showDrawer, setShowDrawer] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [expandedStep, setExpandedStep] = useState<number>(1);
   const isEditMode = !!editingClient;
 
   const { data: clients = [], isLoading } = useQuery({
@@ -56,6 +55,7 @@ export function Clients() {
     reset,
     control,
     formState: { errors },
+    watch,
   } = useForm<ClientFormData | EditClientFormData>({
     resolver: zodResolver(isEditMode ? editClientSchema : clientSchema),
   });
@@ -78,7 +78,7 @@ export function Clients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       toast.success("Cliente criado com sucesso!");
-      handleCloseModal();
+      handleCloseDrawer();
     },
     onError: (error: any) => {
       const message = error.response?.data?.message || "Erro ao criar cliente";
@@ -113,7 +113,7 @@ export function Clients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       toast.success("Cliente atualizado com sucesso!");
-      handleCloseModal();
+      handleCloseDrawer();
     },
     onError: (error: any) => {
       const message =
@@ -133,7 +133,7 @@ export function Clients() {
     },
   });
 
-  const handleOpenModal = () => {
+  const handleOpenDrawer = () => {
     setEditingClient(null);
     reset({
       name: "",
@@ -141,10 +141,11 @@ export function Clients() {
       phone: "",
       password: "",
     });
-    setShowModal(true);
+    setExpandedStep(1);
+    setShowDrawer(true);
   };
 
-  const handleOpenEditModal = (client: Client) => {
+  const handleOpenEditDrawer = (client: Client) => {
     setEditingClient(client);
     reset({
       name: client.user.name,
@@ -152,12 +153,14 @@ export function Clients() {
       phone: client.phone || "",
       password: "",
     });
-    setShowModal(true);
+    setExpandedStep(1);
+    setShowDrawer(true);
   };
 
-  const handleCloseModal = () => {
-    setShowModal(false);
+  const handleCloseDrawer = () => {
+    setShowDrawer(false);
     setEditingClient(null);
+    setExpandedStep(1);
     reset();
   };
 
@@ -194,7 +197,7 @@ export function Clients() {
           <h1 className="text-3xl font-bold text-gray-900">Clientes</h1>
           <p className="text-gray-600 mt-1">Gerencie os clientes cadastrados</p>
         </div>
-        <Button onClick={handleOpenModal}>
+        <Button onClick={handleOpenDrawer}>
           <Plus size={20} className="mr-2" />
           Novo Cliente
         </Button>
@@ -274,7 +277,7 @@ export function Clients() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleOpenEditModal(client)}
+                          onClick={() => handleOpenEditDrawer(client)}
                         >
                           <Edit size={16} />
                         </Button>
@@ -295,74 +298,54 @@ export function Clients() {
         )}
       </Card>
 
-      {/* Create/Edit Modal */}
-      <Modal
-        isOpen={showModal}
-        onClose={handleCloseModal}
+      {/* Create/Edit Drawer */}
+      <Drawer
+        isOpen={showDrawer}
+        onClose={handleCloseDrawer}
         title={isEditMode ? "Editar Cliente" : "Novo Cliente"}
+        size="xl"
       >
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <Input
-            label="Nome Completo"
-            placeholder="João Silva"
-            error={errors.name?.message}
-            {...register("name")}
-          />
-
-          <Input
-            label="Email"
-            type="email"
-            placeholder="joao@email.com"
-            error={errors.email?.message}
-            {...register("email")}
-          />
-
-          <Controller
-            name="phone"
-            control={control}
-            render={({ field }) => (
-              <PhoneInput
-                label="Telefone (opcional)"
-                error={errors.phone?.message}
-                onChange={field.onChange}
-                value={field.value}
+        <div className="flex flex-col min-h-full">
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="flex-1 flex flex-col"
+          >
+            <div className="flex-1">
+              <ClientFormSteps
+                form={
+                  { register, control, formState: { errors }, watch } as any
+                }
+                isEditMode={isEditMode}
+                expandedStep={expandedStep}
+                onStepToggle={setExpandedStep}
               />
-            )}
-          />
+            </div>
 
-          <Input
-            label={
-              isEditMode
-                ? "Nova Senha (deixe em branco para manter a atual)"
-                : "Senha"
-            }
-            type="password"
-            placeholder="••••••••"
-            error={errors.password?.message}
-            {...register("password")}
-          />
-
-          <div className="flex gap-3 pt-4">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleCloseModal}
-              className="flex-1"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              className="flex-1"
-              isLoading={
-                isEditMode ? updateMutation.isPending : createMutation.isPending
-              }
-            >
-              {isEditMode ? "Salvar Alterações" : "Criar Cliente"}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+            {/* Actions */}
+            <div className="flex gap-3 pt-6 pb-6 px-6 mt-auto border-t border-gray-200 bg-white">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleCloseDrawer}
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1"
+                isLoading={
+                  isEditMode
+                    ? updateMutation.isPending
+                    : createMutation.isPending
+                }
+              >
+                {isEditMode ? "Salvar Alterações" : "Criar Cliente"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </Drawer>
     </div>
   );
 }
