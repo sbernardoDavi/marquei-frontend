@@ -16,7 +16,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Plus, Briefcase, Trash2, Clock, Calendar } from "lucide-react";
+import { Plus, Briefcase, Trash2, Clock, Calendar, Edit } from "lucide-react";
 import { dayOfWeekMap } from "../utils/formatters";
 import type { Professional, DayOfWeek } from "../types";
 
@@ -30,9 +30,25 @@ const professionalSchema = z.object({
 
 type ProfessionalFormData = z.infer<typeof professionalSchema>;
 
+// Schema para edição (senha é opcional)
+const editProfessionalSchema = z.object({
+  name: z.string().min(3, "Nome deve ter no mínimo 3 caracteres"),
+  email: z.string().email("Email inválido"),
+  phone: z.string().optional(),
+  password: z
+    .string()
+    .min(6, "Senha deve ter no mínimo 6 caracteres")
+    .optional()
+    .or(z.literal("")),
+  serviceIds: z.array(z.string()).min(1, "Selecione pelo menos um serviço"),
+});
+
+type EditProfessionalFormData = z.infer<typeof editProfessionalSchema>;
+
 export function Professionals() {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedProfessional, setSelectedProfessional] =
     useState<Professional | null>(null);
@@ -57,6 +73,17 @@ export function Professionals() {
     formState: { errors: professionalErrors },
   } = useForm<ProfessionalFormData>({
     resolver: zodResolver(professionalSchema),
+  });
+
+  // Formulário de edição
+  const {
+    register: registerEdit,
+    handleSubmit: handleSubmitEdit,
+    reset: resetEdit,
+    setValue: setValueEdit,
+    formState: { errors: editErrors },
+  } = useForm<EditProfessionalFormData>({
+    resolver: zodResolver(editProfessionalSchema),
   });
 
   // Formulário separado para adicionar horário a profissionais existentes
@@ -112,6 +139,46 @@ export function Professionals() {
     onError: (error: any) => {
       const message =
         error.response?.data?.message || "Erro ao criar profissional";
+      toast.error(message);
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (
+      data: EditProfessionalFormData & {
+        professionalId: string;
+        userId: string;
+      },
+    ) => {
+      // Atualizar dados do usuário
+      const updateData: any = {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+      };
+
+      // Só incluir senha se foi preenchida
+      if (data.password && data.password.trim() !== "") {
+        updateData.password = data.password;
+      }
+
+      await authService.updateUser(data.userId, updateData);
+
+      // Atualizar serviços do profissional
+      await professionalsService.updateProfessional(data.professionalId, {
+        serviceIds: data.serviceIds,
+      });
+
+      return data.professionalId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["professionals"] });
+      toast.success("Profissional atualizado com sucesso!");
+      handleCloseEditModal();
+    },
+    onError: (error: any) => {
+      const message =
+        error.response?.data?.message || "Erro ao atualizar profissional";
       toast.error(message);
     },
   });
@@ -182,6 +249,35 @@ export function Professionals() {
     setWorkSchedules([]);
   };
 
+  const handleOpenEditModal = (professional: Professional) => {
+    setSelectedProfessional(professional);
+
+    // Extrair IDs dos serviços
+    const serviceIds = professional.services.map((item: any) => {
+      const service = item.service || item;
+      return service.id;
+    });
+
+    setSelectedServices(serviceIds);
+
+    resetEdit({
+      name: professional.user.name,
+      email: professional.user.email,
+      phone: professional.user.phone || "",
+      password: "",
+      serviceIds,
+    });
+
+    setShowEditModal(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setShowEditModal(false);
+    setSelectedProfessional(null);
+    resetEdit();
+    setSelectedServices([]);
+  };
+
   const handleOpenScheduleModal = (professional: Professional) => {
     setSelectedProfessional(professional);
     resetSchedule({
@@ -200,6 +296,16 @@ export function Professionals() {
 
   const onSubmitProfessional = (data: ProfessionalFormData) => {
     createMutation.mutate(data);
+  };
+
+  const onSubmitEdit = (data: EditProfessionalFormData) => {
+    if (!selectedProfessional) return;
+
+    updateMutation.mutate({
+      ...data,
+      professionalId: selectedProfessional.id,
+      userId: selectedProfessional.user.id,
+    });
   };
 
   const onSubmitSchedule = (data: WorkScheduleFormData) => {
@@ -227,14 +333,19 @@ export function Professionals() {
     }
   };
 
-  const toggleService = (serviceId: string) => {
+  const toggleService = (serviceId: string, isEditMode = false) => {
     setSelectedServices((prev) => {
       const newServices = prev.includes(serviceId)
         ? prev.filter((id) => id !== serviceId)
         : [...prev, serviceId];
 
-      // Sincronizar com o formulário
-      setValueProfessional("serviceIds", newServices);
+      // Sincronizar com o formulário correto
+      if (isEditMode) {
+        setValueEdit("serviceIds", newServices);
+      } else {
+        setValueProfessional("serviceIds", newServices);
+      }
+
       return newServices;
     });
   };
@@ -303,13 +414,22 @@ export function Professionals() {
                       </p>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={() => handleDelete(professional.id)}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleOpenEditModal(professional)}
+                    >
+                      <Edit size={16} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => handleDelete(professional.id)}
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Services */}
@@ -525,6 +645,94 @@ export function Professionals() {
               isLoading={createScheduleMutation.isPending}
             >
               Adicionar
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Professional Modal */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={handleCloseEditModal}
+        title="Editar Profissional"
+        size="lg"
+      >
+        <form onSubmit={handleSubmitEdit(onSubmitEdit)} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Nome Completo"
+              placeholder="Carlos Silva"
+              error={editErrors.name?.message}
+              {...registerEdit("name")}
+            />
+
+            <Input
+              label="Email"
+              type="email"
+              placeholder="email@email.com"
+              error={editErrors.email?.message}
+              {...registerEdit("email")}
+            />
+          </div>
+
+          <Input
+            label="Telefone (opcional)"
+            type="tel"
+            placeholder="(11) 99999-9999"
+            error={editErrors.phone?.message}
+            {...registerEdit("phone")}
+          />
+
+          <Input
+            label="Nova Senha (deixe em branco para manter a atual)"
+            type="password"
+            placeholder="••••••••"
+            error={editErrors.password?.message}
+            {...registerEdit("password")}
+          />
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Serviços que realiza *
+            </label>
+            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border border-gray-300 rounded-lg">
+              {services.map((service) => (
+                <label
+                  key={service.id}
+                  className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedServices.includes(service.id)}
+                    onChange={() => toggleService(service.id, true)}
+                    className="rounded text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm">{service.name}</span>
+                </label>
+              ))}
+            </div>
+            {editErrors.serviceIds && (
+              <p className="mt-1 text-sm text-danger-500">
+                {editErrors.serviceIds.message}
+              </p>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleCloseEditModal}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              className="flex-1"
+              isLoading={updateMutation.isPending}
+            >
+              Salvar Alterações
             </Button>
           </div>
         </form>
