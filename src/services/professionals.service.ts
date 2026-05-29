@@ -22,7 +22,7 @@ export const professionalsService = {
 
   async updateProfessional(
     id: string,
-    data: { serviceIds?: string[] },
+    data: { name?: string; serviceIds?: string[] },
   ): Promise<Professional> {
     const response = await api.patch<Professional>(
       `/professionals/${id}`,
