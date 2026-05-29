@@ -19,15 +19,13 @@ import type { Appointment } from "../types";
 import { toast } from "sonner";
 import {
   Calendar as CalendarIcon,
-  User,
-  Scissors,
   Plus,
-  Clock,
   ChevronDown,
   Edit2,
 } from "lucide-react";
 import { cn } from "../utils/cn";
-import { Calendar } from "../components/ui/Calendar";
+import { AppointmentCard } from "../components/appointments/AppointmentCard";
+import { DateTimeSelector } from "../components/appointments/DateTimeSelector";
 
 export function Appointments() {
   const { user } = useAuth();
@@ -51,22 +49,15 @@ export function Appointments() {
   // Função para gerar todos os horários possíveis (8h às 20h, intervalos de 30min)
   const generateAllTimeSlots = (date: string) => {
     const slots = [];
-
-    // Criar data em UTC para corresponder com o backend
     const [year, month, day] = date.split("-");
 
-    // Horário de funcionamento: 8h às 20h
     for (let hour = 8; hour <= 20; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
-        // Não adicionar 20:30
         if (hour === 20 && minute === 30) break;
-
-        // Criar ISO string em UTC (mesmo formato que o backend retorna)
         const isoString = `${year}-${month}-${day}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00.000Z`;
         slots.push(isoString);
       }
     }
-
     return slots;
   };
 
@@ -80,17 +71,13 @@ export function Appointments() {
         sortOrder: "desc" as const,
       };
 
-      // Cliente usa endpoint específico
       if (user?.role === "CLIENTE") {
         return appointmentsService.getMyAppointments(params);
       }
-
-      // Gestor e Profissional usam endpoint geral
       return appointmentsService.getAppointments(params);
     },
   });
 
-  // Queries para novo agendamento
   const { data: professionals = [] } = useQuery({
     queryKey: ["professionals"],
     queryFn: professionalsService.getProfessionals,
@@ -120,14 +107,12 @@ export function Appointments() {
         serviceId: selectedServiceId,
         date: selectedDate,
       });
-      console.log("Available slots response:", result);
       return result;
     },
     enabled: !!(selectedProfessionalId && selectedServiceId && selectedDate),
     retry: 1,
   });
 
-  // Query para horários disponíveis ao remarcar
   const {
     data: rescheduleSlotsData = [],
     isLoading: loadingRescheduleSlots,
@@ -282,16 +267,13 @@ export function Appointments() {
     });
   };
 
-  // Obter detalhes do profissional e serviço selecionados
   const selectedProfessional = professionals.find(
     (p) => p.id === selectedProfessionalId,
   );
   const selectedService = services.find((s) => s.id === selectedServiceId);
 
-  // Extrair serviços do profissional (pode vir como array direto ou dentro de relacionamento)
   const professionalServices =
     selectedProfessional?.services?.map((item: any) => {
-      // Se o serviço vier dentro de um objeto 'service', extrair
       return item.service || item;
     }) || [];
 
@@ -306,7 +288,6 @@ export function Appointments() {
   const appointments = data?.data || [];
   const meta = data?.meta;
 
-  // Mensagens personalizadas por role
   const getEmptyMessage = () => {
     if (user?.role === "CLIENTE") {
       return "Você ainda não tem agendamentos";
@@ -315,22 +296,15 @@ export function Appointments() {
   };
 
   const getPageTitle = () => {
-    if (user?.role === "CLIENTE") {
-      return "Meus Agendamentos";
-    }
-    if (user?.role === "PROFISSIONAL") {
-      return "Meus Atendimentos";
-    }
+    if (user?.role === "CLIENTE") return "Meus Agendamentos";
+    if (user?.role === "PROFISSIONAL") return "Meus Atendimentos";
     return "Agendamentos";
   };
 
   const getPageDescription = () => {
-    if (user?.role === "CLIENTE") {
+    if (user?.role === "CLIENTE")
       return "Visualize e gerencie seus agendamentos";
-    }
-    if (user?.role === "PROFISSIONAL") {
-      return "Gerencie seus atendimentos";
-    }
+    if (user?.role === "PROFISSIONAL") return "Gerencie seus atendimentos";
     return "Gerencie todos os agendamentos";
   };
 
@@ -369,112 +343,17 @@ export function Appointments() {
           </Card>
         ) : (
           appointments.map((appointment) => (
-            <Card
+            <AppointmentCard
               key={appointment.id}
-              className="hover:shadow-lg transition-shadow"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1 space-y-3">
-                  {/* Header */}
-                  <div className="flex items-center gap-4">
-                    <span
-                      className={cn(
-                        "px-3 py-1 rounded-full text-sm font-medium",
-                        statusMap[appointment.status]?.color,
-                      )}
-                    >
-                      {statusMap[appointment.status]?.label}
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      #{appointment.id.substring(0, 8)}
-                    </span>
-                  </div>
-
-                  {/* Details */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <CalendarIcon size={18} className="text-gray-400" />
-                      <div>
-                        <p className="text-xs text-gray-500">Data/Hora</p>
-                        <p className="font-medium">
-                          {formatDateTime(appointment.startTime)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {appointment.client && (
-                      <div className="flex items-center gap-2 text-gray-700">
-                        <User size={18} className="text-gray-400" />
-                        <div>
-                          <p className="text-xs text-gray-500">Cliente</p>
-                          <p className="font-medium text-green-700">
-                            {appointment.client.user.name}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <User size={18} className="text-gray-400" />
-                      <div>
-                        <p className="text-xs text-gray-500">Profissional</p>
-                        <p className="font-medium">
-                          {appointment.professional.user.name}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <Scissors size={18} className="text-gray-400" />
-                      <div>
-                        <p className="text-xs text-gray-500">Serviço</p>
-                        <p className="font-medium">
-                          {appointment.service.name}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div
-                  className="flex gap-2 ml-4"
-                  style={{ flexDirection: "column", gap: "1rem" }}
-                >
-                  {(user?.role === "GESTOR" ||
-                    user?.role === "PROFISSIONAL") && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        setSelectedAppointment(appointment);
-                        setShowStatusModal(true);
-                      }}
-                    >
-                      Alterar Status
-                    </Button>
-                  )}
-                  {appointment.status === "AGENDADO" && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => handleOpenRescheduleModal(appointment)}
-                      >
-                        Remarcar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => handleCancelAppointment(appointment.id)}
-                      >
-                        Cancelar
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </Card>
+              appointment={appointment}
+              userRole={user?.role}
+              onChangeStatus={(apt) => {
+                setSelectedAppointment(apt);
+                setShowStatusModal(true);
+              }}
+              onReschedule={handleOpenRescheduleModal}
+              onCancel={handleCancelAppointment}
+            />
           ))
         )}
       </div>
@@ -688,177 +567,29 @@ export function Appointments() {
               </div>
             )}
 
-            {/* Step 3: Select Date */}
+            {/* Steps 3 & 4: Date and Time */}
             {selectedServiceId && (
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setExpandedStep(expandedStep === 3 ? 0 : 3)}
-                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white font-semibold text-sm">
-                      3
-                    </span>
-                    <div className="text-left">
-                      <p className="font-medium text-gray-900">
-                        Selecione a Data
-                      </p>
-                      {selectedDate && (
-                        <p className="text-sm text-gray-600">
-                          {new Date(
-                            selectedDate + "T00:00:00",
-                          ).toLocaleDateString("pt-BR")}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {selectedDate && (
-                      <Edit2 size={16} className="text-gray-400" />
-                    )}
-                    <ChevronDown
-                      size={20}
-                      className={cn(
-                        "text-gray-400 transition-transform",
-                        expandedStep === 3 && "transform rotate-180",
-                      )}
-                    />
-                  </div>
-                </button>
-                {expandedStep === 3 && (
-                  <div className="p-4">
-                    <Calendar
-                      selectedDate={selectedDate}
-                      onSelectDate={(date) => {
-                        setSelectedDate(date);
-                        setSelectedTimeSlot("");
-                        setExpandedStep(4);
-                      }}
-                      minDate={new Date().toISOString().split("T")[0]}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Step 4: Select Time Slot */}
-            {selectedDate && (
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setExpandedStep(expandedStep === 4 ? 0 : 4)}
-                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white font-semibold text-sm">
-                      4
-                    </span>
-                    <div className="text-left">
-                      <p className="font-medium text-gray-900">
-                        Selecione o Horário
-                      </p>
-                      {selectedTimeSlot && (
-                        <p className="text-sm text-gray-600">
-                          {new Date(selectedTimeSlot).toLocaleTimeString(
-                            "pt-BR",
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            },
-                          )}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {selectedTimeSlot && (
-                      <Edit2 size={16} className="text-gray-400" />
-                    )}
-                    <ChevronDown
-                      size={20}
-                      className={cn(
-                        "text-gray-400 transition-transform",
-                        expandedStep === 4 && "transform rotate-180",
-                      )}
-                    />
-                  </div>
-                </button>
-                {expandedStep === 4 && (
-                  <div className="p-4">
-                    {loadingSlots ? (
-                      <p className="text-sm text-gray-500">
-                        Carregando horários disponíveis...
-                      </p>
-                    ) : slotsError ? (
-                      <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                        <p className="text-sm text-red-600">
-                          Erro ao carregar horários disponíveis. Tente
-                          novamente.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
-                        {generateAllTimeSlots(selectedDate).map((slotTime) => {
-                          // Verificar se o horário está disponível
-                          const isAvailable =
-                            Array.isArray(availableSlots) &&
-                            availableSlots.some(
-                              (slot) => slot.startTime === slotTime,
-                            );
-
-                          return (
-                            <button
-                              key={slotTime}
-                              onClick={() => {
-                                if (isAvailable) {
-                                  setSelectedTimeSlot(slotTime);
-                                  setExpandedStep(0); // Fecha todos os steps após seleção
-                                }
-                              }}
-                              disabled={!isAvailable}
-                              className={cn(
-                                "p-3 border-2 rounded-lg text-center transition-all",
-                                selectedTimeSlot === slotTime
-                                  ? "border-primary-500 bg-primary-50 font-semibold"
-                                  : isAvailable
-                                    ? "border-gray-200 hover:border-primary-500 cursor-pointer"
-                                    : "border-gray-100 bg-gray-50 cursor-not-allowed opacity-50",
-                              )}
-                            >
-                              <Clock
-                                size={16}
-                                className={cn(
-                                  "mx-auto mb-1",
-                                  isAvailable
-                                    ? "text-gray-600"
-                                    : "text-gray-400",
-                                )}
-                              />
-                              <p
-                                className={cn(
-                                  "text-sm",
-                                  isAvailable
-                                    ? "text-gray-900"
-                                    : "text-gray-400 line-through",
-                                )}
-                              >
-                                {new Date(slotTime).toLocaleTimeString(
-                                  "pt-BR",
-                                  {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  },
-                                )}
-                              </p>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+              <DateTimeSelector
+                selectedDate={selectedDate}
+                selectedTimeSlot={selectedTimeSlot}
+                expandedStep={expandedStep - 2}
+                availableSlots={availableSlots}
+                loadingSlots={loadingSlots}
+                slotsError={slotsError}
+                onDateSelect={(date) => {
+                  setSelectedDate(date);
+                  setSelectedTimeSlot("");
+                  setExpandedStep(4);
+                }}
+                onTimeSelect={(time) => {
+                  setSelectedTimeSlot(time);
+                  setExpandedStep(0);
+                }}
+                onStepToggle={(step) =>
+                  setExpandedStep(expandedStep === step + 2 ? 0 : step + 2)
+                }
+                generateAllTimeSlots={generateAllTimeSlots}
+              />
             )}
 
             {/* Summary */}
@@ -906,7 +637,7 @@ export function Appointments() {
             )}
           </div>
 
-          {/* Actions - Fixo no final */}
+          {/* Actions */}
           <div className="flex gap-3 pt-6 pb-6 px-6 mt-auto border-t border-gray-200 bg-white">
             <Button
               type="button"
@@ -938,7 +669,7 @@ export function Appointments() {
       >
         <div className="flex flex-col min-h-full">
           <div className="flex-1 space-y-4">
-            {/* Informações do agendamento atual */}
+            {/* Current Appointment Info */}
             {selectedAppointment && (
               <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <h4 className="font-semibold text-gray-900 mb-2">
@@ -961,175 +692,28 @@ export function Appointments() {
               </div>
             )}
 
-            {/* Step 1: Select Date */}
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setExpandedStep(expandedStep === 1 ? 0 : 1)}
-                className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white font-semibold text-sm">
-                    1
-                  </span>
-                  <div className="text-left">
-                    <p className="font-medium text-gray-900">
-                      Selecione a Nova Data
-                    </p>
-                    {selectedDate && (
-                      <p className="text-sm text-gray-600">
-                        {new Date(
-                          selectedDate + "T00:00:00",
-                        ).toLocaleDateString("pt-BR")}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {selectedDate && (
-                    <Edit2 size={16} className="text-gray-400" />
-                  )}
-                  <ChevronDown
-                    size={20}
-                    className={cn(
-                      "text-gray-400 transition-transform",
-                      expandedStep === 1 && "transform rotate-180",
-                    )}
-                  />
-                </div>
-              </button>
-              {expandedStep === 1 && (
-                <div className="p-4">
-                  <Calendar
-                    selectedDate={selectedDate}
-                    onSelectDate={(date) => {
-                      setSelectedDate(date);
-                      setSelectedTimeSlot("");
-                      setExpandedStep(2);
-                    }}
-                    minDate={new Date().toISOString().split("T")[0]}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Step 2: Select Time Slot */}
-            {selectedDate && (
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setExpandedStep(expandedStep === 2 ? 0 : 2)}
-                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white font-semibold text-sm">
-                      2
-                    </span>
-                    <div className="text-left">
-                      <p className="font-medium text-gray-900">
-                        Selecione o Novo Horário
-                      </p>
-                      {selectedTimeSlot && (
-                        <p className="text-sm text-gray-600">
-                          {new Date(selectedTimeSlot).toLocaleTimeString(
-                            "pt-BR",
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            },
-                          )}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {selectedTimeSlot && (
-                      <Edit2 size={16} className="text-gray-400" />
-                    )}
-                    <ChevronDown
-                      size={20}
-                      className={cn(
-                        "text-gray-400 transition-transform",
-                        expandedStep === 2 && "transform rotate-180",
-                      )}
-                    />
-                  </div>
-                </button>
-                {expandedStep === 2 && (
-                  <div className="p-4">
-                    {loadingRescheduleSlots ? (
-                      <p className="text-sm text-gray-500">
-                        Carregando horários disponíveis...
-                      </p>
-                    ) : rescheduleSlotsError ? (
-                      <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                        <p className="text-sm text-red-600">
-                          Erro ao carregar horários disponíveis. Tente
-                          novamente.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
-                        {generateAllTimeSlots(selectedDate).map((slotTime) => {
-                          const isAvailable =
-                            Array.isArray(rescheduleSlotsData) &&
-                            rescheduleSlotsData.some(
-                              (slot) => slot.startTime === slotTime,
-                            );
-
-                          return (
-                            <button
-                              key={slotTime}
-                              onClick={() => {
-                                if (isAvailable) {
-                                  setSelectedTimeSlot(slotTime);
-                                  setExpandedStep(0);
-                                }
-                              }}
-                              disabled={!isAvailable}
-                              className={cn(
-                                "p-3 border-2 rounded-lg text-center transition-all",
-                                selectedTimeSlot === slotTime
-                                  ? "border-primary-500 bg-primary-50 font-semibold"
-                                  : isAvailable
-                                    ? "border-gray-200 hover:border-primary-500 cursor-pointer"
-                                    : "border-gray-100 bg-gray-50 cursor-not-allowed opacity-50",
-                              )}
-                            >
-                              <Clock
-                                size={16}
-                                className={cn(
-                                  "mx-auto mb-1",
-                                  isAvailable
-                                    ? "text-gray-600"
-                                    : "text-gray-400",
-                                )}
-                              />
-                              <p
-                                className={cn(
-                                  "text-sm",
-                                  isAvailable
-                                    ? "text-gray-900"
-                                    : "text-gray-400 line-through",
-                                )}
-                              >
-                                {new Date(slotTime).toLocaleTimeString(
-                                  "pt-BR",
-                                  {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  },
-                                )}
-                              </p>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Date and Time Selector */}
+            <DateTimeSelector
+              selectedDate={selectedDate}
+              selectedTimeSlot={selectedTimeSlot}
+              expandedStep={expandedStep}
+              availableSlots={rescheduleSlotsData}
+              loadingSlots={loadingRescheduleSlots}
+              slotsError={rescheduleSlotsError}
+              onDateSelect={(date) => {
+                setSelectedDate(date);
+                setSelectedTimeSlot("");
+                setExpandedStep(2);
+              }}
+              onTimeSelect={(time) => {
+                setSelectedTimeSlot(time);
+                setExpandedStep(0);
+              }}
+              onStepToggle={(step) =>
+                setExpandedStep(expandedStep === step ? 0 : step)
+              }
+              generateAllTimeSlots={generateAllTimeSlots}
+            />
 
             {/* Summary */}
             {selectedTimeSlot && selectedAppointment && (
