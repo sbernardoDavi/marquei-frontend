@@ -45,11 +45,11 @@ export const appointmentsService = {
   async getAvailableSlots(
     data: AvailableSlotsRequest,
   ): Promise<AvailableSlot[]> {
-    const response = await api.post<AvailableSlot[]>(
+    const response = await api.post<{ slots: string[] }>(
       "/appointments/available-slots",
       data,
     );
-    return response.data;
+    return response.data.slots.map((startTime) => ({ startTime }));
   },
 
   async updateStatus(id: string, status: string): Promise<Appointment> {

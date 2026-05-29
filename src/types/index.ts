@@ -98,7 +98,7 @@ export interface Appointment {
 
 export interface AvailableSlot {
   startTime: string;
-  endTime: string;
+  endTime?: string;
 }
 
 export interface AvailableSlotsRequest {

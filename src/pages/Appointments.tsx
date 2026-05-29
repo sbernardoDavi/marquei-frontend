@@ -6,6 +6,7 @@ import { servicesService } from "../services/services.service";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
+import { Drawer } from "../components/ui/Drawer";
 import { Select } from "../components/ui/Select";
 import { Input } from "../components/ui/Input";
 import {
@@ -17,7 +18,15 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import type { Appointment } from "../types";
 import { toast } from "sonner";
-import { Calendar, User, Scissors, Plus, Clock } from "lucide-react";
+import {
+  Calendar,
+  User,
+  Scissors,
+  Plus,
+  Clock,
+  ChevronDown,
+  Edit2,
+} from "lucide-react";
 import { cn } from "../utils/cn";
 
 export function Appointments() {
@@ -34,6 +43,31 @@ export function Appointments() {
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
+
+  // Estados para controlar seções expandidas
+  const [expandedStep, setExpandedStep] = useState<number>(1);
+
+  // Função para gerar todos os horários possíveis (8h às 20h, intervalos de 30min)
+  const generateAllTimeSlots = (date: string) => {
+    const slots = [];
+
+    // Criar data em UTC para corresponder com o backend
+    const [year, month, day] = date.split("-");
+
+    // Horário de funcionamento: 8h às 20h
+    for (let hour = 8; hour <= 20; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        // Não adicionar 20:30
+        if (hour === 20 && minute === 30) break;
+
+        // Criar ISO string em UTC (mesmo formato que o backend retorna)
+        const isoString = `${year}-${month}-${day}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00.000Z`;
+        slots.push(isoString);
+      }
+    }
+
+    return slots;
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["appointments", page, user?.id, user?.role],
@@ -68,20 +102,28 @@ export function Appointments() {
     enabled: showNewAppointmentModal,
   });
 
-  const { data: availableSlots = [], isLoading: loadingSlots } = useQuery({
+  const {
+    data: availableSlots = [],
+    isLoading: loadingSlots,
+    error: slotsError,
+  } = useQuery({
     queryKey: [
       "available-slots",
       selectedProfessionalId,
       selectedServiceId,
       selectedDate,
     ],
-    queryFn: () =>
-      appointmentsService.getAvailableSlots({
+    queryFn: async () => {
+      const result = await appointmentsService.getAvailableSlots({
         professionalId: selectedProfessionalId,
         serviceId: selectedServiceId,
         date: selectedDate,
-      }),
+      });
+      console.log("Available slots response:", result);
+      return result;
+    },
     enabled: !!(selectedProfessionalId && selectedServiceId && selectedDate),
+    retry: 1,
   });
 
   const createAppointmentMutation = useMutation({
@@ -149,6 +191,7 @@ export function Appointments() {
     setSelectedServiceId("");
     setSelectedDate("");
     setSelectedTimeSlot("");
+    setExpandedStep(1);
   };
 
   const handleCreateAppointment = () => {
@@ -414,187 +457,382 @@ export function Appointments() {
         </div>
       </Modal>
 
-      {/* New Appointment Modal */}
-      <Modal
+      {/* New Appointment Drawer */}
+      <Drawer
         isOpen={showNewAppointmentModal}
         onClose={handleCloseNewAppointmentModal}
         title="Novo Agendamento"
-        size="lg"
+        size="xl"
       >
-        <div className="space-y-6">
-          {/* Step 1: Select Professional */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              1. Selecione o Profissional
-            </label>
-            <Select
-              options={[
-                { value: "", label: "Selecione um profissional" },
-                ...professionals.map((p) => ({
-                  value: p.id,
-                  label: p.user.name,
-                })),
-              ]}
-              value={selectedProfessionalId}
-              onChange={(e) => {
-                setSelectedProfessionalId(e.target.value);
-                setSelectedServiceId("");
-                setSelectedDate("");
-                setSelectedTimeSlot("");
-              }}
-            />
-          </div>
+        <div className="flex flex-col min-h-full">
+          <div className="flex-1 space-y-4">
+            {/* Step 1: Select Professional */}
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setExpandedStep(expandedStep === 1 ? 0 : 1)}
+                className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white font-semibold text-sm">
+                    1
+                  </span>
+                  <div className="text-left">
+                    <p className="font-medium text-gray-900">
+                      Selecione o Profissional
+                    </p>
+                    {selectedProfessionalId && selectedProfessional && (
+                      <p className="text-sm text-gray-600">
+                        {selectedProfessional.user.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {selectedProfessionalId && (
+                    <Edit2 size={16} className="text-gray-400" />
+                  )}
+                  <ChevronDown
+                    size={20}
+                    className={cn(
+                      "text-gray-400 transition-transform",
+                      expandedStep === 1 && "transform rotate-180",
+                    )}
+                  />
+                </div>
+              </button>
+              {expandedStep === 1 && (
+                <div className="p-4">
+                  <Select
+                    options={[
+                      { value: "", label: "Selecione um profissional" },
+                      ...professionals.map((p) => ({
+                        value: p.id,
+                        label: p.user.name,
+                      })),
+                    ]}
+                    value={selectedProfessionalId}
+                    onChange={(e) => {
+                      setSelectedProfessionalId(e.target.value);
+                      setSelectedServiceId("");
+                      setSelectedDate("");
+                      setSelectedTimeSlot("");
+                      if (e.target.value) {
+                        setExpandedStep(2);
+                      }
+                    }}
+                  />
+                </div>
+              )}
+            </div>
 
-          {/* Step 2: Select Service */}
-          {selectedProfessionalId && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                2. Selecione o Serviço
-              </label>
-              {professionalServices.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  Este profissional não tem serviços cadastrados
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 gap-3">
-                  {professionalServices.map((service) => (
-                    <button
-                      key={service.id}
-                      onClick={() => {
-                        setSelectedServiceId(service.id);
-                        setSelectedDate("");
-                        setSelectedTimeSlot("");
-                      }}
-                      className={cn(
-                        "p-4 border-2 rounded-lg text-left transition-all hover:border-primary-500",
-                        selectedServiceId === service.id
-                          ? "border-primary-500 bg-primary-50"
-                          : "border-gray-200",
+            {/* Step 2: Select Service */}
+            {selectedProfessionalId && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setExpandedStep(expandedStep === 2 ? 0 : 2)}
+                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white font-semibold text-sm">
+                      2
+                    </span>
+                    <div className="text-left">
+                      <p className="font-medium text-gray-900">
+                        Selecione o Serviço
+                      </p>
+                      {selectedServiceId && selectedService && (
+                        <p className="text-sm text-gray-600">
+                          {selectedService.name} -{" "}
+                          {formatCurrency(selectedService.price)}
+                        </p>
                       )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-gray-900">
-                            {service.name}
-                          </p>
-                          <p className="text-sm text-gray-500 mt-1">
-                            {formatDuration(service.durationMinutes)}
-                          </p>
-                        </div>
-                        <p className="text-lg font-bold text-primary-600">
-                          {formatCurrency(service.price)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedServiceId && (
+                      <Edit2 size={16} className="text-gray-400" />
+                    )}
+                    <ChevronDown
+                      size={20}
+                      className={cn(
+                        "text-gray-400 transition-transform",
+                        expandedStep === 2 && "transform rotate-180",
+                      )}
+                    />
+                  </div>
+                </button>
+                {expandedStep === 2 && (
+                  <div className="p-4">
+                    {professionalServices.length === 0 ? (
+                      <p className="text-sm text-gray-500">
+                        Este profissional não tem serviços cadastrados
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3">
+                        {professionalServices.map((service) => (
+                          <button
+                            key={service.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedServiceId(service.id);
+                              setSelectedDate("");
+                              setSelectedTimeSlot("");
+                              setExpandedStep(3);
+                            }}
+                            className={cn(
+                              "p-4 border-2 rounded-lg text-left transition-all hover:border-primary-500",
+                              selectedServiceId === service.id
+                                ? "border-primary-500 bg-primary-50"
+                                : "border-gray-200",
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-medium text-gray-900">
+                                  {service.name}
+                                </p>
+                                <p className="text-sm text-gray-500 mt-1">
+                                  {formatDuration(service.durationMinutes)}
+                                </p>
+                              </div>
+                              <p className="text-lg font-bold text-primary-600">
+                                {formatCurrency(service.price)}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 3: Select Date */}
+            {selectedServiceId && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setExpandedStep(expandedStep === 3 ? 0 : 3)}
+                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white font-semibold text-sm">
+                      3
+                    </span>
+                    <div className="text-left">
+                      <p className="font-medium text-gray-900">
+                        Selecione a Data
+                      </p>
+                      {selectedDate && (
+                        <p className="text-sm text-gray-600">
+                          {new Date(
+                            selectedDate + "T00:00:00",
+                          ).toLocaleDateString("pt-BR")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedDate && (
+                      <Edit2 size={16} className="text-gray-400" />
+                    )}
+                    <ChevronDown
+                      size={20}
+                      className={cn(
+                        "text-gray-400 transition-transform",
+                        expandedStep === 3 && "transform rotate-180",
+                      )}
+                    />
+                  </div>
+                </button>
+                {expandedStep === 3 && (
+                  <div className="p-4">
+                    <Input
+                      type="date"
+                      value={selectedDate}
+                      min={new Date().toISOString().split("T")[0]}
+                      onChange={(e) => {
+                        setSelectedDate(e.target.value);
+                        setSelectedTimeSlot("");
+                        if (e.target.value) {
+                          setExpandedStep(4);
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 4: Select Time Slot */}
+            {selectedDate && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setExpandedStep(expandedStep === 4 ? 0 : 4)}
+                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white font-semibold text-sm">
+                      4
+                    </span>
+                    <div className="text-left">
+                      <p className="font-medium text-gray-900">
+                        Selecione o Horário
+                      </p>
+                      {selectedTimeSlot && (
+                        <p className="text-sm text-gray-600">
+                          {new Date(selectedTimeSlot).toLocaleTimeString(
+                            "pt-BR",
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            },
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedTimeSlot && (
+                      <Edit2 size={16} className="text-gray-400" />
+                    )}
+                    <ChevronDown
+                      size={20}
+                      className={cn(
+                        "text-gray-400 transition-transform",
+                        expandedStep === 4 && "transform rotate-180",
+                      )}
+                    />
+                  </div>
+                </button>
+                {expandedStep === 4 && (
+                  <div className="p-4">
+                    {loadingSlots ? (
+                      <p className="text-sm text-gray-500">
+                        Carregando horários disponíveis...
+                      </p>
+                    ) : slotsError ? (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-600">
+                          Erro ao carregar horários disponíveis. Tente
+                          novamente.
                         </p>
                       </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                        {generateAllTimeSlots(selectedDate).map((slotTime) => {
+                          // Verificar se o horário está disponível
+                          const isAvailable =
+                            Array.isArray(availableSlots) &&
+                            availableSlots.some(
+                              (slot) => slot.startTime === slotTime,
+                            );
 
-          {/* Step 3: Select Date */}
-          {selectedServiceId && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                3. Selecione a Data
-              </label>
-              <Input
-                type="date"
-                value={selectedDate}
-                min={new Date().toISOString().split("T")[0]}
-                onChange={(e) => {
-                  setSelectedDate(e.target.value);
-                  setSelectedTimeSlot("");
-                }}
-              />
-            </div>
-          )}
-
-          {/* Step 4: Select Time Slot */}
-          {selectedDate && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                4. Selecione o Horário
-              </label>
-              {loadingSlots ? (
-                <p className="text-sm text-gray-500">
-                  Carregando horários disponíveis...
-                </p>
-              ) : availableSlots.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  Nenhum horário disponível para esta data
-                </p>
-              ) : (
-                <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
-                  {availableSlots.map((slot) => (
-                    <button
-                      key={slot.startTime}
-                      onClick={() => setSelectedTimeSlot(slot.startTime)}
-                      className={cn(
-                        "p-3 border-2 rounded-lg text-center transition-all hover:border-primary-500",
-                        selectedTimeSlot === slot.startTime
-                          ? "border-primary-500 bg-primary-50 font-semibold"
-                          : "border-gray-200",
-                      )}
-                    >
-                      <Clock size={16} className="mx-auto mb-1 text-gray-600" />
-                      <p className="text-sm">
-                        {new Date(slot.startTime).toLocaleTimeString("pt-BR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
+                          return (
+                            <button
+                              key={slotTime}
+                              onClick={() => {
+                                if (isAvailable) {
+                                  setSelectedTimeSlot(slotTime);
+                                  setExpandedStep(0); // Fecha todos os steps após seleção
+                                }
+                              }}
+                              disabled={!isAvailable}
+                              className={cn(
+                                "p-3 border-2 rounded-lg text-center transition-all",
+                                selectedTimeSlot === slotTime
+                                  ? "border-primary-500 bg-primary-50 font-semibold"
+                                  : isAvailable
+                                    ? "border-gray-200 hover:border-primary-500 cursor-pointer"
+                                    : "border-gray-100 bg-gray-50 cursor-not-allowed opacity-50",
+                              )}
+                            >
+                              <Clock
+                                size={16}
+                                className={cn(
+                                  "mx-auto mb-1",
+                                  isAvailable
+                                    ? "text-gray-600"
+                                    : "text-gray-400",
+                                )}
+                              />
+                              <p
+                                className={cn(
+                                  "text-sm",
+                                  isAvailable
+                                    ? "text-gray-900"
+                                    : "text-gray-400 line-through",
+                                )}
+                              >
+                                {new Date(slotTime).toLocaleTimeString(
+                                  "pt-BR",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  },
+                                )}
+                              </p>
+                            </button>
+                          );
                         })}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
-          {/* Summary */}
-          {selectedTimeSlot && selectedService && selectedProfessional && (
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <h4 className="font-semibold text-gray-900 mb-3">
-                Resumo do Agendamento
-              </h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Profissional:</span>
-                  <span className="font-medium">
-                    {selectedProfessional.user.name}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Serviço:</span>
-                  <span className="font-medium">{selectedService.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Data:</span>
-                  <span className="font-medium">
-                    {new Date(selectedDate).toLocaleDateString("pt-BR")}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Horário:</span>
-                  <span className="font-medium">
-                    {new Date(selectedTimeSlot).toLocaleTimeString("pt-BR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </div>
-                <div className="flex justify-between pt-2 border-t border-gray-200">
-                  <span className="text-gray-600">Valor:</span>
-                  <span className="font-bold text-primary-600">
-                    {formatCurrency(selectedService.price)}
-                  </span>
+            {/* Summary */}
+            {selectedTimeSlot && selectedService && selectedProfessional && (
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-semibold text-gray-900 mb-3">
+                  Resumo do Agendamento
+                </h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Profissional:</span>
+                    <span className="font-medium">
+                      {selectedProfessional.user.name}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Serviço:</span>
+                    <span className="font-medium">{selectedService.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Data:</span>
+                    <span className="font-medium">
+                      {new Date(selectedDate + "T00:00:00").toLocaleDateString(
+                        "pt-BR",
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Horário:</span>
+                    <span className="font-medium">
+                      {new Date(selectedTimeSlot).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-gray-200">
+                    <span className="text-gray-600">Valor:</span>
+                    <span className="font-bold text-primary-600">
+                      {formatCurrency(selectedService.price)}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-4">
+          {/* Actions - Fixo no final */}
+          <div className="flex gap-3 pt-6 pb-6 px-6 mt-auto border-t border-gray-200 bg-white">
             <Button
               type="button"
               variant="secondary"
@@ -614,7 +852,7 @@ export function Appointments() {
             </Button>
           </div>
         </div>
-      </Modal>
+      </Drawer>
     </div>
   );
 }
